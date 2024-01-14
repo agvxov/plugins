@@ -17,13 +17,16 @@ public:
 };
 
 
-class Plugin : public albert::plugin::ExtensionPlugin<albert::GlobalQueryHandler>
+class Plugin : public albert::plugin::ExtensionPlugin,
+               public albert::GlobalQueryHandler
 {
     Q_OBJECT ALBERT_PLUGIN
 public:
+    QWidget *buildConfigWidget() override;
     std::vector<albert::RankItem> handleGlobalQuery(const GlobalQuery*) const override;
     std::vector<albert::Extension*> extensions() override;
 
+    static const QStringList icon_urls;
 private:
     TimeZoneHandler tzh;
 };
