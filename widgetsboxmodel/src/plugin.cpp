@@ -20,19 +20,25 @@
 #include <QtStateMachine/QKeyEventTransition>
 #include <QtStateMachine/QSignalTransition>
 #include <QtStateMachine/QStateMachine>
+#include <QStyleFactory>
 #include <utility>
 ALBERT_LOGGING_CATEGORY("wbm")
 using namespace std;
 using namespace albert;
 
 namespace  {
-const char*   CFG_WND_POS  = "windowPosition";
+
+const uint    DEF_SHADOW_SIZE = 32;  // TODO user
+const char*   STATE_WND_POS  = "windowPosition";
+
 const char*   CFG_CENTERED = "showCentered";
 const bool    DEF_CENTERED = true;
 const char*   CFG_FOLLOW_CURSOR = "followCursor";
 const bool    DEF_FOLLOW_CURSOR = true;
 const char*   CFG_THEME = "theme";
-const char*   DEF_THEME = "Spotlight";
+const char*   DEF_THEME = "Default";
+const char*   CFG_THEME_DARK = "dark_theme";
+const char*   DEF_THEME_DARK = "Default";
 const char*   CFG_HIDE_ON_FOCUS_LOSS = "hideOnFocusLoss";
 const bool    DEF_HIDE_ON_FOCUS_LOSS = true;
 const char*   CFG_QUIT_ON_CLOSE = "quitOnClose";
@@ -53,7 +59,6 @@ const char*   CFG_CLIENT_SHADOW = "clientShadow";
 const bool    DEF_CLIENT_SHADOW = true;
 const char*   CFG_SYSTEM_SHADOW = "systemShadow";
 const bool    DEF_SYSTEM_SHADOW = true;
-const uint    DEF_SHADOW_SIZE = 32;  // TODO user
 
 
 //constexpr Qt::KeyboardModifier mods_mod[] = {
@@ -91,12 +96,24 @@ struct CondSignalTransition : public QSignalTransition {
     bool eventTest(QEvent *e) override { return QSignalTransition::eventTest(e) && test_(); }
     function<bool()> test_;
 };
+
+static bool haveDarkPalette()
+{
+    const QPalette defaultPalette;
+    return defaultPalette.color(QPalette::WindowText).lightness()
+           > defaultPalette.color(QPalette::Window).lightness();
 }
+
+}
+
 
 Plugin::Plugin()
 {
     display_delay_timer.setSingleShot(true);
     display_delay_timer.setInterval(100);
+
+    // reproducible UX
+    window.setStyle(QStyleFactory::create("Fusion"));
 
     // Find themes
     QStringList pluginDataPaths = QStandardPaths::locateAll(
@@ -108,37 +125,45 @@ Plugin::Plugin()
     if (themes_.empty())
         throw runtime_error("No theme files found.");
 
-    // Settings
-    auto s = settings();
-    setShowCentered(s->value(CFG_CENTERED, DEF_CENTERED).toBool());
-    setFollowCursor(s->value(CFG_FOLLOW_CURSOR, DEF_FOLLOW_CURSOR).toBool());
-    if (!showCentered() && s->contains(CFG_WND_POS) && s->value(CFG_WND_POS).canConvert(QMetaType(QMetaType::QPoint)))
-        window.move(s->value(CFG_WND_POS).toPoint());
-    setHideOnFocusLoss(s->value(CFG_HIDE_ON_FOCUS_LOSS, DEF_HIDE_ON_FOCUS_LOSS).toBool());
-    setQuitOnClose(s->value(CFG_QUIT_ON_CLOSE, DEF_QUIT_ON_CLOSE).toBool());
-    setClearOnHide(s->value(CFG_CLEAR_ON_HIDE, DEF_CLEAR_ON_HIDE).toBool());
-    setAlwaysOnTop(s->value(CFG_ALWAYS_ON_TOP, DEF_ALWAYS_ON_TOP).toBool());
-    setHistorySearchEnabled(s->value(CFG_HISTORY_SEARCH, DEF_HISTORY_SEARCH).toBool());
-    setShowFallbacksOnEmptyMatches(s->value(CFG_SHOW_FALLBACKS, DEF_SHOW_FALLBACKS).toBool());
-    setMaxResults(s->value(CFG_MAX_RESULTS, DEF_MAX_RESULTS).toUInt());
-    setDisplayScrollbar(s->value(CFG_DISPLAY_SCROLLBAR, DEF_DISPLAY_SCROLLBAR).toBool());
-    setDisplayClientShadow(s->value(CFG_CLIENT_SHADOW, DEF_CLIENT_SHADOW).toBool());
-    setDisplaySystemShadow(s->value(CFG_SYSTEM_SHADOW, DEF_SYSTEM_SHADOW).toBool());
-    theme_ = s->value(CFG_THEME, DEF_THEME).toString();
-    if (!setTheme(theme_))
-        WARN << "Stylefile not found:" << theme_;
+    {
+        auto s = settings();
+        setShowCentered(s->value(CFG_CENTERED, DEF_CENTERED).toBool());
+        setFollowCursor(s->value(CFG_FOLLOW_CURSOR, DEF_FOLLOW_CURSOR).toBool());
+        setHideOnFocusLoss(s->value(CFG_HIDE_ON_FOCUS_LOSS, DEF_HIDE_ON_FOCUS_LOSS).toBool());
+        setQuitOnClose(s->value(CFG_QUIT_ON_CLOSE, DEF_QUIT_ON_CLOSE).toBool());
+        setClearOnHide(s->value(CFG_CLEAR_ON_HIDE, DEF_CLEAR_ON_HIDE).toBool());
+        setAlwaysOnTop(s->value(CFG_ALWAYS_ON_TOP, DEF_ALWAYS_ON_TOP).toBool());
+        setHistorySearchEnabled(s->value(CFG_HISTORY_SEARCH, DEF_HISTORY_SEARCH).toBool());
+        setShowFallbacksOnEmptyMatches(s->value(CFG_SHOW_FALLBACKS, DEF_SHOW_FALLBACKS).toBool());
+        setMaxResults(s->value(CFG_MAX_RESULTS, DEF_MAX_RESULTS).toUInt());
+        setDisplayScrollbar(s->value(CFG_DISPLAY_SCROLLBAR, DEF_DISPLAY_SCROLLBAR).toBool());
+        setDisplayClientShadow(s->value(CFG_CLIENT_SHADOW, DEF_CLIENT_SHADOW).toBool());
+        setDisplaySystemShadow(s->value(CFG_SYSTEM_SHADOW, DEF_SYSTEM_SHADOW).toBool());
+        theme_light_ = s->value(CFG_THEME, DEF_THEME).toString();
+        theme_dark_ = s->value(CFG_THEME_DARK, DEF_THEME_DARK).toString();
+    }
+
+    {
+        auto s = state();
+        if (!showCentered()
+            && s->contains(STATE_WND_POS)
+            && s->value(STATE_WND_POS).canConvert(QMetaType(QMetaType::QPoint)))
+            window.move(s->value(STATE_WND_POS).toPoint());
+    }
+
+    dark_mode_ = haveDarkPalette();
+    applyTheme(dark_mode_ ? theme_dark_ : theme_light_);
 
     init_statemachine();
 
-    // Reset history, if text was manually changed
-    connect(window.input_line, &QLineEdit::textEdited, this, [this](){
+    connect(window.input_line, &QLineEdit::textEdited, this, [this]()
+    {
         history_.resetIterator();
         user_text = window.input_line->text();
     });
 
-    // Reset history, if text was manually changed
-    connect(window.input_line, &QLineEdit::textChanged, this, [this](const QString &text){
-//        CRIT << "textChanged";
+    connect(window.input_line, &QLineEdit::textChanged, this, [this](const QString &text)
+    {
         if (current_query){
             current_query->cancel();
             disconnect(current_query.get(), &albert::Query::finished, this, &Plugin::queryFinsished);
@@ -421,14 +446,18 @@ void Plugin::init_statemachine()
 
     // Activations
 
-    auto activate = [this, s_results_model_matches, s_results_model_fallbacks](uint i, uint a){
+    auto activate = [this, s_results_model_matches, s_results_model_fallbacks](uint i, uint a)
+    {
         if (s_results_model_matches->active())
             current_query->activateMatch(i, a);
         else if (s_results_model_fallbacks->active())
             current_query->activateFallback(i, a);
         else
             WARN << "Activated action in neither Match nor Fallback state.";
+
+        // dup intended, catch activations and current text
         history_.add(window.input_line->text());
+
         if (!QApplication::keyboardModifiers().testFlag(Qt::ControlModifier))
             window.hide();
         else
@@ -448,6 +477,13 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
 {
     if (event->type() == QEvent::FocusOut && hideOnFocusLoss_)
         setVisible(false);
+
+    else if (event->type() == QEvent::ApplicationPaletteChange)
+    {
+        DEBG << "QEvent::ApplicationPaletteChange";
+        applyTheme((dark_mode_ = haveDarkPalette()) ? theme_dark_ : theme_light_);
+        return true;
+    }
 
     else if (event->type() == QEvent::Close && quitOnClose_)
         qApp->quit();
@@ -484,17 +520,25 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
         }
     }
 
-    else if (event->type() == QEvent::Hide) {
+    else if (event->type() == QEvent::Hide)
+    {
         window.settings_button->rotation_animation->stop();
-        if (clearOnHide_){
-            history_.add(window.input_line->text());
+
+        state()->setValue(STATE_WND_POS, window.pos());
+
+        if (clearOnHide_)
             window.input_line->clear();
-        } else
+        else
             window.input_line->selectAll();
+
+        // dup intended, catch activations and text-on-hide
+        history_.add(window.input_line->text());
+        history_.resetIterator();
+        user_text.clear();
+
 
         // clear all obsolete queries
         queries_.remove_if([this](auto &q){return !(q == current_query || q == displayed_query);});
-
     }
 
     else if (event->type() == QEvent::KeyPress) {
@@ -518,10 +562,17 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
                 if (!window.results_list->currentIndex().isValid()
                     || keyEvent->modifiers().testFlag(Qt::ShiftModifier)
                     || (window.results_list->currentIndex().row() == 0
-                        && !keyEvent->isAutoRepeat() ) ){ // ... and first row (non repeat)
+                        && !keyEvent->isAutoRepeat())) // ... and first row (non repeat)
+                {
                     QString next = history_.next(history_search_ ? user_text : "");
-                    if (!next.isEmpty())
-                        window.input_line->setText(next);
+
+                    // Without ClearOnHide the text is already in the input
+                    // I.e. the first item in history equals the input text
+                    if (next == window.input_line->text())
+                        next = history_.next(history_search_ ? user_text : "");
+
+                    window.input_line->setText(next);
+
                     return true;
                 }
                 return false;
@@ -593,20 +644,23 @@ bool Plugin::isVisible() const
 
 void Plugin::setVisible(bool visible)
 {
+    // You probably dont want to put code here
+    // see QEvent::Hide
+
     window.setVisible(visible);
-    if (visible){
+
+    if (visible)
+    {
 #if not defined Q_OS_MACOS // steals focus on macos
         window.raise();
         window.activateWindow();
 #endif
-    } else {
-        settings()->setValue(CFG_WND_POS, window.pos());
     }
 }
 
 QWidget* Plugin::buildConfigWidget()
 {
-    auto *l = new QLabel("Configure the frontend in the 'Window' tab.");
+    auto *l = new QLabel(tr("Configure the frontend in the 'Window' tab."));
     l->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     return l;
 }
@@ -665,25 +719,74 @@ QWidget* Plugin::createFrontendConfigWidget()
     connect(ui.checkBox_system_shadow, &QCheckBox::toggled,
             this, &Plugin::setDisplaySystemShadow);
 
-    for (const auto&[name, path] : themes()) {
-        ui.comboBox_themes->addItem(name, path);
-        if (name == theme())
-            ui.comboBox_themes->setCurrentIndex(ui.comboBox_themes->count()-1);
+    for (const auto&[name, path] : themes())
+    {
+        ui.comboBox_theme_light->addItem(name, path);
+        if (name == theme_light_)
+            ui.comboBox_theme_light->setCurrentIndex(ui.comboBox_theme_light->count()-1);
     }
+    connect(ui.comboBox_theme_light,
+            static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this,
+            [this, comboBox_themes=ui.comboBox_theme_light](int i)
+            { setLightTheme(comboBox_themes->itemText(i)); });
 
-    connect(ui.comboBox_themes, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-            this, [this, widget, comboBox_themes=ui.comboBox_themes](int i){
-                if (!setTheme(comboBox_themes->itemText(i)))
-                    QMessageBox(QMessageBox::Critical, "Error", "Could not apply theme.",
-                                QMessageBox::NoButton, widget).exec();
-            });
+    for (const auto&[name, path] : themes())
+    {
+        ui.comboBox_theme_dark->addItem(name, path);
+        if (name == theme_dark_)
+            ui.comboBox_theme_dark->setCurrentIndex(ui.comboBox_theme_dark->count()-1);
+    }
+    connect(ui.comboBox_theme_dark,
+            static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this,
+            [this, comboBox_themes=ui.comboBox_theme_dark](int i)
+            { setDarkTheme(comboBox_themes->itemText(i)); });
 
     return widget;
 }
 
 unsigned long long Plugin::winId() const { return window.winId(); }
 
-// PROPERTIES
+QString Plugin::defaultTrigger() const { return "themes "; }
+
+void Plugin::handleTriggerQuery(TriggerQuery *query) const
+{
+    for (const auto &[name, path] : themes_)
+        if (name.startsWith(query->string(), Qt::CaseInsensitive))
+            query->add(
+                StandardItem::make(
+                    QString("theme_%1").arg(name),
+                    name,
+                    path,
+                    {":app_icon"},
+                    {
+                        {
+                            "apply", tr("Apply theme"),
+                            [self=const_cast<Plugin*>(this), n=name](){ self->applyTheme(n); }
+                        },
+                        {
+                            "setlight", tr("Use in light mode"),
+                            [self=const_cast<Plugin*>(this), n=name](){ self->setLightTheme(n); }
+                        },
+                        {
+                            "setdark", tr("Use in dark mode"),
+                            [self=const_cast<Plugin*>(this), n=name](){ self->setDarkTheme(n); }
+                        },
+                        {
+                            "open", tr("Open theme file"),
+                            [p=path](){ openUrl("file://"+p); }
+                        }
+                    }
+                    )
+                );
+}
+
+
+
+/*
+ *  PROPERTIES
+ */
 
 QString Plugin::input() const { return window.input_line->text(); }
 
@@ -691,23 +794,40 @@ void Plugin::setInput(const QString &input) { window.input_line->setText(input);
 
 const map<QString, QString> &Plugin::themes() const { return themes_; }
 
-const QString &Plugin::theme() const { return theme_; }
-
-bool Plugin::setTheme(const QString &theme)
+void Plugin::applyTheme(const QString& theme)
 {
-    try {
-        QFile f(themes_.at(theme));  // throws
-        if (f.open(QFile::ReadOnly)) {
-            window.setStyleSheet(f.readAll());
-            f.close();
-            settings()->setValue(CFG_THEME, theme);
-            theme_ = theme;
-            return true;
-        }
-    } catch (const out_of_range&) {
-        CRIT << "Set theme does not exist.";
+    QFile f(themes_.at(theme));  // should not fail
+    if (f.open(QFile::ReadOnly))
+    {
+        window.setStyleSheet(f.readAll());
+        f.close();
     }
-    return false;
+    else
+    {
+        CRIT << "Set theme does not exist.";
+        QMessageBox::critical(nullptr, qApp->applicationDisplayName(),
+                              tr("Set theme does not exist."));
+    }
+}
+
+const QString &Plugin::lightTheme() const
+{ return theme_light_; }
+
+void Plugin::setLightTheme(const QString &theme)
+{
+    settings()->setValue(CFG_THEME, theme_light_ = theme);
+    if (!dark_mode_)
+        applyTheme(theme);
+}
+
+const QString &Plugin::darkTheme() const
+{ return theme_dark_; }
+
+void Plugin::setDarkTheme(const QString &theme)
+{
+    settings()->setValue(CFG_THEME_DARK, theme_dark_ = theme);
+    if (dark_mode_)
+        applyTheme(theme);
 }
 
 uint Plugin::maxResults() const { return window.results_list->maxItems(); }
@@ -829,29 +949,3 @@ void Plugin::setDisplaySystemShadow(bool value)
     settings()->setValue(CFG_SYSTEM_SHADOW, value);
     window.setWindowFlags(window.windowFlags().setFlag(Qt::NoDropShadowWindowHint, !value));
 }
-
-QString Plugin::defaultTrigger() const { return "themes "; }
-
-void Plugin::handleTriggerQuery(TriggerQuery *query) const
-{
-    for (const auto &[name, path] : themes_)
-        if (name.startsWith(query->string(), Qt::CaseInsensitive))
-            query->add(
-                StandardItem::make(
-                    QString("theme_%1").arg(name),
-                    name,
-                    path,
-                    {":app_icon"},
-                    {
-                        {
-                            "apply", "Apply theme",
-                            [self=const_cast<Plugin*>(this), n=name](){ self->setTheme(n); }
-                        },{
-                            "open", "Open theme file",
-                            [p=path](){ openUrl("file://"+p); }
-                        }
-                    }
-                )
-            );
-}
-

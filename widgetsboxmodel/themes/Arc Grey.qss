@@ -1,10 +1,4 @@
-/*
- * author: ubervison <https://github.com/ubervison>
- *
- * Check http://doc.qt.io/qt-5/stylesheet-syntax.html especially the subtopics:
- * The Style Sheet Syntax (http://doc.qt.io/qt-5/stylesheet-syntax.html)
- * Qt Style Sheets Reference (http://doc.qt.io/qt-5/stylesheet-reference.html)
- */
+/* Copyright ubervison <https://github.com/ubervison> */
 
 * {
     border: none;
@@ -56,8 +50,8 @@ QListView {
 }
 
 QListView::item:selected {
-    background: #F5F6F7;
-    border: 1px solid #4084D6;
+    background: #4084D6;
+    border: 1px solid ;
 }
 
 QListView QScrollBar:vertical  {

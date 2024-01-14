@@ -11,16 +11,24 @@
 #include <map>
 #include <memory>
 
-class Plugin : public albert::plugin::ExtensionPlugin<albert::Frontend>,
+class Plugin : public albert::plugin::ExtensionPlugin,
+               public albert::Frontend,
                public albert::TriggerQueryHandler
 {
-    Q_OBJECT ALBERT_PLUGIN
+    Q_OBJECT
+    ALBERT_PLUGIN
+
 public:
     Plugin();
 
+    const QString &lightTheme() const;
+    void setLightTheme(const QString& theme);
+
+    const QString &darkTheme() const;
+    void setDarkTheme(const QString& theme);
+
     const std::map<QString, QString> &themes() const;
-    const QString &theme() const;
-    bool setTheme(const QString& theme);
+    void applyTheme(const QString& theme);
 
     uint maxResults() const;
     void setMaxResults(uint max);
@@ -85,7 +93,9 @@ private:
     QString user_text; // used for history search
     std::map<QString, QString> themes_;
     std::list<std::shared_ptr<albert::Query>> queries_;
-    QString theme_;
+    QString theme_light_;
+    QString theme_dark_;
+    bool dark_mode_;
     bool show_fallbacks_on_empty_query = true;
     bool hideOnFocusLoss_{};
     bool showCentered_{};
