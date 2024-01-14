@@ -7,7 +7,8 @@
 #include "fsindex.h"
 #include <QSettings>
 
-class Plugin : public albert::plugin::ExtensionPlugin<albert::IndexQueryHandler>
+class Plugin : public albert::plugin::ExtensionPlugin,
+               public albert::IndexQueryHandler
 {
     Q_OBJECT ALBERT_PLUGIN
     ALBERT_PLUGIN_PROPERTY(bool, fsBrowsersCaseSensitive, false)

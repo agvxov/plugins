@@ -43,7 +43,7 @@ Plugin::Plugin():
     connect(&fs_index_, &FsIndex::updatedFinished, this, [this](){ updateIndexItems(); });
 
     QJsonObject object;
-    if (QFile file(cacheDir()->filePath(INDEX_FILE_NAME)); file.open(QIODevice::ReadOnly))
+    if (QFile file(cacheDir().filePath(INDEX_FILE_NAME)); file.open(QIODevice::ReadOnly))
         object = QJsonDocument(QJsonDocument::fromJson(file.readAll())).object();
 
     auto s = settings();
@@ -69,10 +69,10 @@ Plugin::Plugin():
 
     update_item = StandardItem::make(
         "scan_files",
-        "Update index",
-        "Update the file index",
+        tr("Update index"),
+        tr("Update the file index"),
         {":app_icon"},
-        {{"scan_files", "Index", [this](){ fs_index_.update(); }}}
+        {{"scan_files", tr("Scan"), [this](){ fs_index_.update(); }}}
     );
 }
 
@@ -98,7 +98,7 @@ Plugin::~Plugin()
     }
     s->setValue(CFG_PATHS, paths);
 
-    if (QFile file(cacheDir()->filePath(INDEX_FILE_NAME)); file.open(QIODevice::WriteOnly)) {
+    if (QFile file(cacheDir().filePath(INDEX_FILE_NAME)); file.open(QIODevice::WriteOnly)) {
         DEBG << "Storing file index to" << file.fileName();
         file.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
         file.close();
@@ -111,7 +111,7 @@ std::vector<Extension *> Plugin::extensions() { return {this, &homebrowser, &roo
 void Plugin::updateIndexItems()
 {
     // Get file items
-    vector<shared_ptr<AbstractFileItem>> items;
+    vector<shared_ptr<FileItem>> items;
     for (auto &[path, fsp] : fs_index_.indexPaths())
         fsp->items(items);
 
@@ -124,30 +124,30 @@ void Plugin::updateIndexItems()
     ii.emplace_back(update_item, update_item->text());
 
     // Add trash item
-    ii.emplace_back(StandardItem::make(
-            "trash",
-            "Trash",
-            "Your trash folder",
-            {"xdg:user-trash-full", "qsp:SP_TrashIcon"},
+    auto item = StandardItem::make(
+        "trash",
+        tr("Trash"),
+        tr("Your trash folder"),
+        {"xdg:user-trash-full", "qsp:SP_TrashIcon"},
+        {
             {
-                {
-                    "open", "Open trash",
+                "open", tr("Open trash"),
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
-                    [=](){ openUrl(QStringLiteral("trash:///")); }
+                [=](){ openUrl(QStringLiteral("trash:///")); }
 #elif defined(Q_OS_MAC)
-                    [=](){ openUrl(QString("file://%1/.Trash").arg(QDir::homePath())); }
-#endif
-                }
-#if defined(Q_OS_MAC)
-                ,
-                {
-                    "empty", "Empty trash",
-                    [=](){ runDetachedProcess({"osascript", "-e", "tell application \"Finder\" to empty trash"}); }
-                }
+                [=](){ openUrl(QString("file://%1/.Trash").arg(QDir::homePath())); }
 #endif
             }
-        ), "trash"
+#if defined(Q_OS_MAC)
+            ,
+            {
+                "empty", tr("Empty trash"),
+                [=](){ runDetachedProcess({"osascript", "-e", "tell application \"Finder\" to empty trash"}); }
+            }
+#endif
+        }
     );
+    ii.emplace_back(item, item->text());
 
     setIndexItems(::move(ii));
 }
