@@ -17,42 +17,49 @@ Details may change every now and then anyway.
 ## CMake
 
 A native plugin is a [Qt Plugin](https://doc.qt.io/qt-6/plugins-howto.html#the-low-level-api-extending-qt-applications), i.e. a shared library providing a particular interface.
-To build such a library you have to define CMake targets and create an appropiate metadata file.
-The [CMake module](https://raw.githubusercontent.com/albertlauncher/albert/master/cmake/albert-macros.cmake) provides convenience macros for this purpose.
-You should probably skim through this module once.
-The `albert_plugin` macro should be sufficient for most trivial plugins:
+Albert uses CMake and provides convenient macros, most notably the `albert_plugin` macro, you can utilize to get started without having to write a lot of CMake boilerplate code. 
+Read the documentation header of the [CMake module](https://raw.githubusercontent.com/albertlauncher/albert/master/cmake/albert-macros.cmake) before you proceed.
+
+This basic CMakeLists.txt is sufficient to build a basic plugin without dependencies and translations:
 
 ```cmake
-albert_plugin (
-    NAME name 
-    DESCRIPTION description
-    LICENSE licencse
-    URL url
-    [LONG_DESCRIPTION long_description]
-    [FRONTEND]
-    [MAINTAINERS ...]
-    [QT_DEPENDENCIES ...]
-    [LIB_DEPENDENCIES ...]
-    [EXEC_DEPENDENCIES ...]
+project(my_plugin VERSION 1.0)
+albert_plugin(
+    SOURCE_FILES
+        src/*
 )
 ```
 
+Unless you specify `METADATA` in the `albert_plugin` macro, a metadata file is expected to be found at `metadata.json`.
 
-|         Parameter |  Type  | Notes |
-|------------------:|:------:|---|
-|              NAME | value  | Human readable name. |
-|       DESCRIPTION | value  | Brief, imperative description, e.g. "Open files". |
-|           LICENSE | value  | Short form, e.g. BSD-2-Clause or GPL-3.0. |
-|               URL | value  | Browsable online source, issues etc. |
-|  LONG_DESCRIPTION | value  | Longer description or absolute file path to a text file (supports Markdown). |
-|       MAINTAINERS |  list  | A list of active maintainers. Preferrably using mentionable GitHub usernames. |
-|   QT_DEPENDENCIES |  list  | Qt dependencies to import and link. Qt::Core is in the public interface of libalbert. |
-|  LIB_DEPENDENCIES |  list  | Required libraries. Displayed to the user. |
-| EXEC_DEPENDENCIES |  list  | Required executables. Displayed to the user. |
-|          FRONTEND | option | Indicates that this plugin implements the frontend interface. |
-|          NOUNLOAD | option | Prohibits unloading at runtime. |
+Supported metadata keys:
 
 
+|            Parameter |     Type     | Notes                                                                     |
+|---------------------:|:------------:|---------------------------------------------------------------------------|
+|                   id |              | Reserved. Added by CMake.                                                 |
+|              version |              | Reserved. Added by CMake.                                                 |
+|                 name | local string | Human readable name.                                                      |
+|          description | local string | Brief, imperative description, e.g. "Open files".                         |
+|              license |    string    | SPDX license identifier. E.g. BSD-2-Clause, MIT, LGPL-3.0-only, …         |
+|                  url |    string    | Browsable online source code, issues etc.                                 |
+|              authors | string list  | List of copyright holders. Preferably using mentionable GitHub usernames. |
+| runtime_dependencies | string list  | Default: `[]`. Required libraries.                                        |
+|  binary_dependencies | string list  | Default: `[]`. Required executables.                                      |
+|              credits | string list  | Default: `[]`. Attributions, mentions, third party library licenses, …    |
+|             loadtype |    string    | Default: `user`. One `frontend`, `nounload`, `user`.                      |
+
+A basic metadata file looks like this:
+
+```json
+{
+    "name": "My Plugin",
+    "description": "Do useful stuff",
+    "authors": ["@myname"],
+    "license": "MIT",
+    "url": "https://github.com/myusername/my-albert-plugin",
+}
+```
 ## C++
 
 On the C++ side you have to tell the Qt MOC which interface the plugin implements and where the metadata is located.
@@ -66,13 +73,15 @@ By now you should understand a plugin class declaration like this:
 
 ```cpp
 #pragma once
-#include "albert/extension/queryhandler/triggerqueryhandler.h"
+#include "albert/extension/queryhandler/globalqueryhandler.h"
 #include "albert/plugin.h"
 
-class Plugin : public albert::plugin::ExtensionPlugin<albert::TriggerQueryHandler>
+class Plugin : public albert::plugin::ExtensionPlugin, public albert::GlobalQueryHandler
 {
     Q_OBJECT ALBERT_PLUGIN
-    ...
+public:
+    std::vector<albert::RankItem> handleGlobalQuery(const GlobalQuery*) const override;
+    QWidget *buildConfigWidget() override;
 };
 ```
 
@@ -85,7 +94,6 @@ See
 
 Self explanatory examples serve way better as educational source than hundreds of lines of text.
 See the [official native plugins](https://github.com/albertlauncher/plugins/tree/master/) as a reference.
-The `debug`, `template` and `hash` plugins are good plugins to start reading. 
 
 Finally you may want to skim through the entire [albert namespace](https://albertlauncher.github.io/reference/namespacealbert.html).
 
