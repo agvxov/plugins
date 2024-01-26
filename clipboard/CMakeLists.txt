@@ -7,8 +7,8 @@ albert_plugin(
         src/plugin.h
     TS_FILES
         i18n/${PROJECT_NAME}_de.ts
-    PRIVATE_LINK_LIBRARIES
-        albert::snippets
+    PRIVATE_INCLUDE_DIRECTORIES
+        $<TARGET_PROPERTY:albert::snippets,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 
