@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QMessageBox>
+#include <QPointer>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -279,7 +280,7 @@ QString PyPluginLoader::load()
                             << metadata_.runtime_dependencies
                     );
 
-                    auto *te = new QTextEdit;
+                    QPointer<QTextEdit> te(new QTextEdit);
                     te->setCurrentFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
                     te->setReadOnly(true);
                     te->setWindowTitle(QString("Installing '%1' dependencies").arg(metadata_.name));
@@ -296,16 +297,20 @@ QString PyPluginLoader::load()
                     QObject::connect(&proc, &QProcess::finished, &loop, &QEventLoop::quit);
                     loop.exec();
 
-                    if (proc.exitStatus() == QProcess::ExitStatus::NormalExit && proc.exitCode() == EXIT_SUCCESS){
+                    if (proc.exitStatus() == QProcess::ExitStatus::NormalExit && proc.exitCode() == EXIT_SUCCESS)
+                    {
+                        if (te)
+                            te->close();  // auto-close on success only
+                        return load_();  // On success try to load again
 
-                        te->deleteLater();  // auto-close on success only
-                        return load_();  // On success try again
-
-                    } else
+                    }
+                    else
                         err = "Installing dependencies failed.";
-                } else
+                }
+                else
                     err = "Dependencies are missing.";
-            } else
+            }
+            else
                 throw e;
         }
     } catch(const std::exception &e) {
