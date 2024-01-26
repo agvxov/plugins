@@ -1,4 +1,4 @@
-project(websearch VERSION 8.0)
+project(websearch VERSION 8.1)
 
 albert_plugin(
     SOURCE_FILES

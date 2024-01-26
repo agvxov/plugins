@@ -30,6 +30,12 @@
         "url": "https://www.google.com/search?q=%s"
     },
     {
+        "iconPath": ":google_translate",
+        "name": "Google Translate",
+        "trigger": "gt",
+        "url": "https://translate.google.com/?text=%s"
+    },
+    {
         "iconPath": ":maps",
         "name": "Google Maps",
         "trigger": "maps",
