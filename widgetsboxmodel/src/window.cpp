@@ -14,26 +14,34 @@
 #include <QMouseEvent>
 #include <QSpacerItem>
 
+#include <QLabel>
+
 Window::Window():
-    frame(new QFrame(this)),
+    container(new QWidget(this)),
+    window_layout(new QVBoxLayout(this)),
+    frame(new QFrame(container)),
     input_line(new InputLine(frame)),
-    settings_button(new SettingsButton(this)),
+    settings_button(new SettingsButton(container)),
     results_list(new ResizingList(frame)),
     actions_list(new ResizingList(frame)),
     item_delegate(new ItemDelegate(results_list)),
-    action_delegate(new ActionDelegate(actions_list))
+    action_delegate(new ActionDelegate(actions_list)),
+    spacer(new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed))
 {
     results_list->setItemDelegate(item_delegate);
     actions_list->setItemDelegate(action_delegate);
 
-    auto *window_layout = new QVBoxLayout(this);
-    window_layout->addWidget(frame);
+    window_layout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+    window_layout->addItem(spacer);
+    window_layout->addWidget(container);
+
+    auto *container_layout = new QHBoxLayout(container);
+    container_layout->addWidget(frame);
 
     auto *frame_layout = new QVBoxLayout(frame);
     frame_layout->addWidget(input_line,0); //, 0, Qt::AlignTop);
     frame_layout->addWidget(results_list,0); //, 0, Qt::AlignTop);
     frame_layout->addWidget(actions_list,0); //, 1, Qt::AlignTop);
-    frame_layout->addStretch(1);
 
     // Identifiers for stylesheets
     frame->setObjectName("frame");
@@ -43,10 +51,10 @@ Window::Window():
     actions_list->setObjectName("actionList");
 
     window_layout->setContentsMargins(0,0,0,0);
+    container_layout->setContentsMargins(0,0,0,0);
     frame_layout->setContentsMargins(0,0,0,0);
 
-    window_layout->setSizeConstraint(QLayout::SetFixedSize);
-
+    frame->setSizePolicy(QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Fixed);
     input_line->setSizePolicy(QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Fixed);
     results_list->setSizePolicy(QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Fixed);
     actions_list->setSizePolicy(QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Fixed);
@@ -56,7 +64,6 @@ Window::Window():
     actions_list->setFocusPolicy(Qt::NoFocus);
     actions_list->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-
     setWindowFlags(Qt::Tool|Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
 }
@@ -64,6 +71,12 @@ Window::Window():
 bool Window::event(QEvent *event)
 {
     if (event->type() == QEvent::Close){  // Never close
+        hide();
+        return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonPress)
+    {
         hide();
         return true;
     }
@@ -95,4 +108,3 @@ bool Window::event(QEvent *event)
 //        }
 //    }
 }
-
