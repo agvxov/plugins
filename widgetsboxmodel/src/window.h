@@ -3,6 +3,7 @@
 #pragma once
 #include <QPoint>
 #include <QWidget>
+#include <QSpacerItem>
 class ActionDelegate;
 class InputLine;
 class ItemDelegate;
@@ -16,6 +17,7 @@ class Window : public QWidget
 public:
     Window();
 
+    QWidget *container;
     QFrame *frame;
     InputLine *input_line;
     SettingsButton *settings_button;
@@ -24,9 +26,10 @@ public:
     ItemDelegate *item_delegate;
     ActionDelegate *action_delegate;
 
+   QSpacerItem *spacer;
+
 private:
     bool event(QEvent *event) override;
 
     QPoint clickOffset_;  // The offset from cursor to topleft. Used when the window is dagged
-
 };

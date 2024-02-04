@@ -54,6 +54,9 @@ public:
     bool alwaysOnTop() const;
     void setAlwaysOnTop(bool alwaysOnTop);
 
+    bool fullscreen() const;
+    void setFullscreen(bool alwaysOnTop);
+
     bool displayScrollbar() const;
     void setDisplayScrollbar(bool value);
 
@@ -103,6 +106,9 @@ private:
     bool quitOnClose_{};
     bool clearOnHide_{};
     bool history_search_{};
+    bool fullscreen_{};
+   
+   QScreen *getScreen();
 
     enum class Mod {Shift, Meta, Contol, Alt};
     Mod mod_command = Mod::Contol;

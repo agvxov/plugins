@@ -26,6 +26,21 @@ ALBERT_LOGGING_CATEGORY("wbm")
 using namespace std;
 using namespace albert;
 
+QString getObjectTreeString(QObject *obj, int indent = 0) {
+    QString result;
+    QTextStream stream(&result);
+
+    QString spaces(indent, ' ');
+    stream << spaces << obj->metaObject()->className() << " " << obj << "\n";
+
+    // Recursively traverse child objects
+    foreach(QObject *child, obj->children()) {
+        result += getObjectTreeString(child, indent + 2);
+    }
+
+    return result;
+}
+
 namespace  {
 
 const uint    DEF_SHADOW_SIZE = 32;  // TODO user
@@ -47,6 +62,8 @@ const char*   CFG_CLEAR_ON_HIDE = "clearOnHide";
 const bool    DEF_CLEAR_ON_HIDE = false;
 const char*   CFG_ALWAYS_ON_TOP = "alwaysOnTop";
 const bool    DEF_ALWAYS_ON_TOP = true;
+const char*   CFG_FULLSCREEN = "fullscreen";
+const bool    DEF_FULLSCREEN = false;
 const char*   CFG_SHOW_FALLBACKS = "showFallbacksOnEmpty";
 const bool    DEF_SHOW_FALLBACKS = true;
 const char*   CFG_HISTORY_SEARCH = "historySearch";
@@ -133,6 +150,7 @@ Plugin::Plugin()
         setQuitOnClose(s->value(CFG_QUIT_ON_CLOSE, DEF_QUIT_ON_CLOSE).toBool());
         setClearOnHide(s->value(CFG_CLEAR_ON_HIDE, DEF_CLEAR_ON_HIDE).toBool());
         setAlwaysOnTop(s->value(CFG_ALWAYS_ON_TOP, DEF_ALWAYS_ON_TOP).toBool());
+        setFullscreen(s->value(CFG_FULLSCREEN, DEF_FULLSCREEN).toBool());
         setHistorySearchEnabled(s->value(CFG_HISTORY_SEARCH, DEF_HISTORY_SEARCH).toBool());
         setShowFallbacksOnEmptyMatches(s->value(CFG_SHOW_FALLBACKS, DEF_SHOW_FALLBACKS).toBool());
         setMaxResults(s->value(CFG_MAX_RESULTS, DEF_MAX_RESULTS).toUInt());
@@ -153,6 +171,7 @@ Plugin::Plugin()
 
     dark_mode_ = haveDarkPalette();
     applyTheme(dark_mode_ ? theme_dark_ : theme_light_);
+
 
     init_statemachine();
 
@@ -489,34 +508,54 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
         qApp->quit();
 
     else if (event->type() == QEvent::Show) {
+      auto screen = getScreen();
+
         window.settings_button->rotation_animation->start();
 
         // Trigger a new query on show
         emit window.input_line->textChanged(window.input_line->text());
 
+        // Resize based on the users fullscreen preference
+        if (fullscreen_)
+        {
+         window.container->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+
+            const auto screen_geo = screen->geometry();
+            window.setMinimumSize(screen_geo.size());
+            window.resize(screen_geo.size());
+        }
+        else {
+         window.container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+
+         window.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+
+            window.resize(window.container->sizeHint());
+      }
+
         // If showCentered or off screen (e.g. display disconnected) move into visible area
         if (showCentered_ || !window.screen()) {
-            QScreen *screen = nullptr;
-            if (followCursor_){
-                if (screen = QGuiApplication::screenAt(QCursor::pos()); !screen){
-                    WARN << "Could not retrieve screen for cursor position. Using primary screen.";
-                    screen = QGuiApplication::primaryScreen();
-                }
-            }
-            else
-                screen = QGuiApplication::primaryScreen();
-
             // move window  TODO remove debugging stuff heree
             auto geo = screen->geometry();
 
-            auto win_width = window.frameSize().width();
-            auto newX = geo.center().x() - win_width / 2;
+            auto primary_width = window.container->width(); //window.frameSize().width();
+            auto newX = geo.center().x() - primary_width / 2;
             auto newY = geo.top() + geo.height() / 5;
 
             DEBG << screen->name() << screen->manufacturer() << screen->model() << screen->devicePixelRatio() << geo;
-            DEBG << "win_width" << win_width  << "newX" << newX << "newY" << newY;
+            DEBG << "primary_width" << primary_width  << "newX" << newX << "newY" << newY;
 
-            window.move(newX, newY);
+            if (fullscreen_)
+            {
+                window.move(0, 0);
+            window.spacer->changeSize(0, geo.height() / 5);
+                //window.container->move(newX, newY);
+            }
+            else
+            {
+                window.move(newX, newY);
+            window.spacer->changeSize(0, 0);
+                //window.container->move(0, 0);
+            }
         }
     }
 
@@ -682,6 +721,10 @@ QWidget* Plugin::createFrontendConfigWidget()
     ui.checkBox_onTop->setChecked(alwaysOnTop());
     connect(ui.checkBox_onTop, &QCheckBox::toggled,
             this, &Plugin::setAlwaysOnTop);
+
+    ui.checkBox_fullscreen->setChecked(fullscreen());
+    connect(ui.checkBox_fullscreen, &QCheckBox::toggled,
+            this, &Plugin::setFullscreen);
 
     ui.checkBox_hideOnFocusOut->setChecked(hideOnFocusLoss());
     connect(ui.checkBox_hideOnFocusOut, &QCheckBox::toggled,
@@ -899,10 +942,30 @@ bool Plugin::alwaysOnTop() const
     return window.windowFlags().testFlag(Qt::WindowStaysOnTopHint);
 }
 
+bool Plugin::fullscreen() const
+{
+    return fullscreen_;
+}
+
 void Plugin::setAlwaysOnTop(bool alwaysOnTop)
 {
     settings()->setValue(CFG_ALWAYS_ON_TOP, alwaysOnTop);
     window.setWindowFlags(window.windowFlags().setFlag(Qt::WindowStaysOnTopHint, alwaysOnTop));
+}
+
+void Plugin::setFullscreen(bool b)
+{
+    settings()->setValue(CFG_FULLSCREEN, b);
+    fullscreen_ = b;
+   if (fullscreen_)
+   {
+      const auto screen = getScreen();
+      window.spacer->changeSize(0, screen->geometry().height() / 5);
+   }
+   else
+   {
+      window.spacer->changeSize(0, 0);
+   }
 }
 
 bool Plugin::displayScrollbar() const
@@ -948,4 +1011,20 @@ void Plugin::setDisplaySystemShadow(bool value)
 {
     settings()->setValue(CFG_SYSTEM_SHADOW, value);
     window.setWindowFlags(window.windowFlags().setFlag(Qt::NoDropShadowWindowHint, !value));
+}
+
+// get frameoffset or something so 5 is not a magic literal
+QScreen *Plugin::getScreen() {
+    QScreen *screen = nullptr;
+    if (followCursor_){
+        if (screen = QGuiApplication::screenAt(QCursor::pos()); !screen){
+            WARN << "Could not retrieve screen for cursor position. Using primary screen.";
+            screen = QGuiApplication::primaryScreen();
+        }
+    }
+    else {
+        screen = QGuiApplication::primaryScreen();
+   }
+
+   return screen;
 }
