@@ -3,7 +3,6 @@
 #pragma once
 #include <QPoint>
 #include <QWidget>
-#include <QSpacerItem>
 class ActionDelegate;
 class InputLine;
 class ItemDelegate;
@@ -11,6 +10,8 @@ class QEvent;
 class QFrame;
 class ResizingList;
 class SettingsButton;
+class QVBoxLayout;
+class QSpacerItem;
 
 class Window : public QWidget
 {
@@ -18,6 +19,7 @@ public:
     Window();
 
     QWidget *container;
+    QVBoxLayout *window_layout;
     QFrame *frame;
     InputLine *input_line;
     SettingsButton *settings_button;
@@ -25,8 +27,7 @@ public:
     ResizingList *actions_list;
     ItemDelegate *item_delegate;
     ActionDelegate *action_delegate;
-
-   QSpacerItem *spacer;
+    QSpacerItem *spacer;
 
 private:
     bool event(QEvent *event) override;

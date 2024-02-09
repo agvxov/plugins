@@ -26,24 +26,10 @@ ALBERT_LOGGING_CATEGORY("wbm")
 using namespace std;
 using namespace albert;
 
-QString getObjectTreeString(QObject *obj, int indent = 0) {
-    QString result;
-    QTextStream stream(&result);
-
-    QString spaces(indent, ' ');
-    stream << spaces << obj->metaObject()->className() << " " << obj << "\n";
-
-    // Recursively traverse child objects
-    foreach(QObject *child, obj->children()) {
-        result += getObjectTreeString(child, indent + 2);
-    }
-
-    return result;
-}
-
 namespace  {
 
 const uint    DEF_SHADOW_SIZE = 32;  // TODO user
+const uint    DEF_BODY_OFFSET_DIVISOR = 5;
 const char*   STATE_WND_POS  = "windowPosition";
 
 const char*   CFG_CENTERED = "showCentered";
@@ -508,7 +494,7 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
         qApp->quit();
 
     else if (event->type() == QEvent::Show) {
-      auto screen = getScreen();
+        auto screen = Screen();
 
         window.settings_button->rotation_animation->start();
 
@@ -518,28 +504,21 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
         // Resize based on the users fullscreen preference
         if (fullscreen_)
         {
-         window.container->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
-
             const auto screen_geo = screen->geometry();
             window.setMinimumSize(screen_geo.size());
             window.resize(screen_geo.size());
         }
-        else {
-         window.container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-
-         window.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-
+        else
             window.resize(window.container->sizeHint());
-      }
 
         // If showCentered or off screen (e.g. display disconnected) move into visible area
         if (showCentered_ || !window.screen()) {
             // move window  TODO remove debugging stuff heree
             auto geo = screen->geometry();
 
-            auto primary_width = window.container->width(); //window.frameSize().width();
+            auto primary_width = window.container->width();
             auto newX = geo.center().x() - primary_width / 2;
-            auto newY = geo.top() + geo.height() / 5;
+            auto newY = geo.top() + geo.height() / DEF_BODY_OFFSET_DIVISOR;
 
             DEBG << screen->name() << screen->manufacturer() << screen->model() << screen->devicePixelRatio() << geo;
             DEBG << "primary_width" << primary_width  << "newX" << newX << "newY" << newY;
@@ -547,14 +526,12 @@ bool Plugin::eventFilter(QObject*, QEvent *event)
             if (fullscreen_)
             {
                 window.move(0, 0);
-            window.spacer->changeSize(0, geo.height() / 5);
-                //window.container->move(newX, newY);
+                window.spacer->changeSize(0, geo.height() / DEF_BODY_OFFSET_DIVISOR);
             }
             else
             {
                 window.move(newX, newY);
-            window.spacer->changeSize(0, 0);
-                //window.container->move(0, 0);
+                window.spacer->changeSize(0, 0);
             }
         }
     }
@@ -957,15 +934,21 @@ void Plugin::setFullscreen(bool b)
 {
     settings()->setValue(CFG_FULLSCREEN, b);
     fullscreen_ = b;
-   if (fullscreen_)
-   {
-      const auto screen = getScreen();
-      window.spacer->changeSize(0, screen->geometry().height() / 5);
-   }
-   else
-   {
-      window.spacer->changeSize(0, 0);
-   }
+    if (fullscreen_)
+    {
+        window.window_layout->setSizeConstraint(QLayout::SetDefaultConstraint);
+        window.setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+        window.container->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+        const auto screen = Screen();
+        window.spacer->changeSize(0, screen->geometry().height() / DEF_BODY_OFFSET_DIVISOR);
+    }
+    else
+    {
+        window.window_layout->setSizeConstraint(QLayout::SetFixedSize);
+        window.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        window.container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        window.spacer->changeSize(0, 0);
+    }
 }
 
 bool Plugin::displayScrollbar() const
@@ -1013,8 +996,7 @@ void Plugin::setDisplaySystemShadow(bool value)
     window.setWindowFlags(window.windowFlags().setFlag(Qt::NoDropShadowWindowHint, !value));
 }
 
-// get frameoffset or something so 5 is not a magic literal
-QScreen *Plugin::getScreen() {
+QScreen * Plugin::Screen() {
     QScreen *screen = nullptr;
     if (followCursor_){
         if (screen = QGuiApplication::screenAt(QCursor::pos()); !screen){

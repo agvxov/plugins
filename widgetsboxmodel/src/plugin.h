@@ -107,8 +107,7 @@ private:
     bool clearOnHide_{};
     bool history_search_{};
     bool fullscreen_{};
-   
-   QScreen *getScreen();
+    QScreen *Screen();
 
     enum class Mod {Shift, Meta, Contol, Alt};
     Mod mod_command = Mod::Contol;
